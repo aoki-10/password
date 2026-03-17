@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パスワードマネージャー</title>
+    
+    <!-- PWA Settings -->
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="パス管理">
+    
+    <!-- App Icon (SVG Data URI) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'%3%3Cpath d='M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5S13.4 12 12 12s-2.5-1.1-2.5-2.5S10.6 7 12 7zm-5 8c0-1.66 3.33-2.5 5-2.5s5 .84 5 2.5v1H7v-1z'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'%3%3Cpath d='M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5S13.4 12 12 12s-2.5-1.1-2.5-2.5S10.6 7 12 7zm-5 8c0-1.66 3.33-2.5 5-2.5s5 .84 5 2.5v1H7v-1z'/%3E%3C/svg%3E">
+
+    <!-- Web App Manifest (Inline via Data URI) -->
+    <link rel="manifest" href="data:application/json,{'name':'パスワードマネージャー','short_name':'パス管理','start_url':'.','display':'standalone','background_color':'%23f8fafc','theme_color':'%232563eb','icons':[{'src':'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%232563eb\'%3E%3Cpath d=\'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5S13.4 12 12 12s-2.5-1.1-2.5-2.5S10.6 7 12 7zm-5 8c0-1.66 3.33-2.5 5-2.5s5 .84 5 2.5v1H7v-1z\'/%3E%3C/svg%3E','sizes':'512x512','type':'image/svg+xml','purpose':'any maskable'}]}">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.4); backdrop-filter: blur(2px); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 text-slate-900">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    パスワードマネージャー
+                </h1>
+                <p class="text-sm text-slate-500 font-medium">詳細履歴管理・プレビュー機能搭載</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportData()" class="text-xs bg-white border border-slate-300 px-3 py-2 rounded shadow-sm hover:bg-slate-50 transition font-semibold">バックアップ保存 (JSON)</button>
+                <label class="text-xs bg-white border border-slate-300 px-3 py-2 rounded shadow-sm hover:bg-slate-50 cursor-pointer transition font-semibold">
+                    復元 (読み込み)
+                    <input type="file" id="importFile" class="hidden" accept=".json" onchange="importData(event)">
+                </label>
+            </div>
+        </header>
+
+        <!-- Main Content Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Panel: Preview / Form (5 cols) -->
+            <div class="lg:col-span-5">
+                <div id="leftPanel" class="bg-white rounded-2xl shadow-sm border border-slate-200 sticky top-8 overflow-hidden flex flex-col max-h-[calc(100vh-8rem)]">
+                    <div id="panelContent" class="p-6 overflow-y-auto custom-scrollbar">
+                        <!-- Content via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: List (7 cols) -->
+            <div class="lg:col-span-7 space-y-4">
+                <!-- Search Bar -->
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="サイト名、ID、備考で検索..." class="w-full px-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                </div>
+
+                <div id="passwordList" class="space-y-3 pb-20 lg:pb-0">
+                    <!-- Dynamic List -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmModal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm relative z-10 overflow-hidden">
+            <div class="p-6">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-800 mb-2">確認</h3>
+                <p id="modalMessage" class="text-sm text-slate-600 mb-6 leading-relaxed">この操作を実行しますか？</p>
+                <div class="flex gap-3">
+                    <button id="modalConfirmBtn" class="flex-1 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-900 transition">実行</button>
+                    <button onclick="closeModal()" class="flex-1 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-200 transition">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-2 rounded shadow-lg transform translate-y-20 transition-transform duration-300 pointer-events-none z-50">
+        メッセージ
+    </div>
+
+    <script>
+        let passwords = [];
+        let viewMode = 'form';
+        let currentEditIndex = -1;
+        let selectedIndex = -1;
+
+        const COPY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+
+        window.onload = () => {
+            const saved = localStorage.getItem('local_pass_data');
+            if (saved) {
+                passwords = JSON.parse(saved);
+            }
+            showForm();
+            renderList();
+        };
+
+        document.getElementById('searchInput').addEventListener('input', renderList);
+
+        function showForm(index = -1) {
+            viewMode = 'form';
+            currentEditIndex = index;
+            selectedIndex = -1;
+            const panel = document.getElementById('panelContent');
+            const data = index !== -1 ? passwords[index] : { site: '', username: '', password: '', note: '' };
+            
+            panel.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-slate-800">${index === -1 ? '新規登録' : '情報を編集'}</h2>
+                    ${index !== -1 ? `<button onclick="showPreview(${index})" class="text-sm text-blue-600 hover:underline">詳細に戻る</button>` : ''}
+                </div>
+                <form id="passwordForm" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">サイト名</label>
+                        <input type="text" id="site" required value="${escapeHtml(data.site)}" placeholder="例: Amazon" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">ID / ユーザー名</label>
+                        <input type="text" id="username" required value="${escapeHtml(data.username)}" placeholder="example@mail.com" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">パスワード</label>
+                        <div class="relative">
+                            <input type="text" id="password" required value="${escapeHtml(data.password)}" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono">
+                            <button type="button" onclick="generatePass()" class="absolute right-2 top-2 text-xs bg-white border border-slate-200 px-2 py-1 rounded shadow-sm hover:bg-slate-50 transition">自動生成</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">備考</label>
+                        <textarea id="note" rows="4" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm shadow-inner">${escapeHtml(data.note)}</textarea>
+                    </div>
+                    <div class="flex gap-3 pt-4">
+                        <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-100 transition active:scale-95">保存する</button>
+                        <button type="button" onclick="showForm()" class="px-6 py-3 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition active:scale-95">クリア</button>
+                    </div>
+                </form>
+            `;
+
+            document.getElementById('passwordForm').onsubmit = handleFormSubmit;
+            renderList();
+        }
+
+        function showPreview(index) {
+            // 再クリックで解除
+            if (viewMode === 'preview' && selectedIndex === index) {
+                showForm();
+                return;
+            }
+
+            viewMode = 'preview';
+            selectedIndex = index;
+            const data = passwords[index];
+            const panel = document.getElementById('panelContent');
+
+            panel.innerHTML = `
+                <div class="flex justify-between items-start mb-6">
+                    <div class="min-w-0 pr-2">
+                        <p class="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">詳細プレビュー</p>
+                        <h2 class="text-2xl font-black text-slate-800 break-all leading-tight">${escapeHtml(data.site)}</h2>
+                    </div>
+                    <button onclick="showForm()" class="text-xs font-bold text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-200 px-3 py-1 rounded-full transition flex items-center gap-1 shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
+                        新規作成
+                    </button>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="flex gap-2 pb-4 border-b border-slate-100">
+                        <button onclick="confirmEdit(${index})" class="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition font-bold text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            編集
+                        </button>
+                        <button onclick="confirmDelete(${index})" class="flex-1 flex items-center justify-center gap-2 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition font-bold text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            削除
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">ID / ユーザー名</label>
+                            <div class="flex justify-between items-center">
+                                <span class="font-semibold text-slate-700 break-all pr-2">${escapeHtml(data.username)}</span>
+                                <button onclick="copyToClipboard('${data.username.replace(/'/g, "\\'")}', 'ID')" class="text-blue-500 hover:text-blue-700 shrink-0 p-1">${COPY_ICON}</button>
+                            </div>
+                        </div>
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">現在のパスワード</label>
+                            <div class="flex justify-between items-center">
+                                <span class="font-mono font-bold text-slate-800 break-all pr-2" id="previewPass">••••••••</span>
+                                <div class="flex gap-2 shrink-0">
+                                    <button onclick="toggleValueVisibility(this, 'previewPass', '${data.password.replace(/'/g, "\\'")}')" class="text-xs text-slate-500 hover:text-slate-800 font-bold px-2 py-1 rounded">表示</button>
+                                    <button onclick="copyToClipboard('${data.password.replace(/'/g, "\\'")}', 'パスワード')" class="text-blue-500 hover:text-blue-700 p-1">${COPY_ICON}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">備考</label>
+                        <div class="p-4 bg-amber-50/20 border border-amber-100/50 rounded-xl text-sm text-slate-600 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
+                            ${data.note ? escapeHtml(data.note) : '<span class="italic text-slate-300">備考はありません</span>'}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase">更新履歴</label>
+                            <span class="text-[10px] text-slate-300 italic">過去の変更点を表示</span>
+                        </div>
+                        <div class="space-y-4">
+                            ${(!data.history || data.history.length === 0) ? `
+                                <div class="text-center py-8 border-2 border-dashed border-slate-100 rounded-xl">
+                                    <p class="text-xs text-slate-300">変更履歴はありません</p>
+                                </div>
+                            ` : data.history.map((h, i) => `
+                                <div class="relative pl-6 pb-2 border-l-2 border-slate-100">
+                                    <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-blue-400 shadow-sm"></div>
+                                    <div class="mb-1">
+                                        <span class="text-[11px] font-bold text-slate-700">${h.changedAt}</span>
+                                    </div>
+                                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs shadow-sm">
+                                        ${h.diff ? renderDiff(h.diff) : `<p class="text-slate-500 font-medium">初期登録、またはパスワードのみ更新</p>`}
+                                        <div class="mt-2 flex items-center gap-2 pt-2 border-t border-slate-200">
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase">当時のPW:</span>
+                                            <span class="font-mono text-slate-600 flex-1 truncate" id="histPass-${i}">••••••••</span>
+                                            <div class="flex gap-2">
+                                                <button onclick="toggleValueVisibility(this, 'histPass-${i}', '${h.password.replace(/'/g, "\\'")}')" class="text-[10px] text-slate-500 font-bold hover:text-slate-800 transition">表示</button>
+                                                <button onclick="copyToClipboard('${h.password.replace(/'/g, "\\'")}', '履歴のパスワード')" class="text-[10px] text-blue-600 font-bold hover:underline">コピー</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            renderList();
+        }
+
+        function renderDiff(diff) {
+            let html = '<ul class="space-y-2">';
+            const labels = { site: 'サイト名', username: 'ID', password: 'パスワード', note: '備考' };
+            for (const key in diff) {
+                html += `
+                    <li class="flex flex-col gap-1">
+                        <span class="font-bold text-blue-600 text-[10px]">${labels[key] || key}:</span>
+                        <div class="flex items-center gap-2 flex-wrap bg-white p-1 rounded border border-slate-100">
+                            <span class="line-through text-red-400 bg-red-50 px-1 rounded truncate max-w-[140px]">${escapeHtml(diff[key].from) || '(なし)'}</span>
+                            <span class="text-slate-400 text-[9px]">▶</span>
+                            <span class="text-green-600 bg-green-50 px-1 rounded font-semibold truncate max-w-[140px]">${escapeHtml(diff[key].to) || '(空)'}</span>
+                        </div>
+                    </li>
+                `;
+            }
+            html += '</ul>';
+            return html;
+        }
+
+        function toggleValueVisibility(btn, targetId, actualValue) {
+            const el = document.getElementById(targetId);
+            if (btn.innerText === "表示") {
+                el.innerText = actualValue;
+                btn.innerText = "隠す";
+            } else {
+                el.innerText = "••••••••";
+                btn.innerText = "表示";
+            }
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const site = document.getElementById('site').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const note = document.getElementById('note').value;
+            const now = new Date().toLocaleString('ja-JP');
+
+            if (currentEditIndex === -1) {
+                passwords.push({ site, username, password, note, updatedAt: now, history: [] });
+                showToast("新規登録しました");
+                saveAndRender();
+                showForm();
+            } else {
+                const old = passwords[currentEditIndex];
+                const diff = {};
+                if (old.site !== site) diff.site = { from: old.site, to: site };
+                if (old.username !== username) diff.username = { from: old.username, to: username };
+                if (old.password !== password) diff.password = { from: old.password, to: password };
+                if (old.note !== note) diff.note = { from: old.note, to: note };
+
+                if (Object.keys(diff).length > 0) {
+                    if (!old.history) old.history = [];
+                    old.history.unshift({ password: old.password, changedAt: old.updatedAt || "不明", diff: diff });
+                    passwords[currentEditIndex] = { ...old, site, username, password, note, updatedAt: now };
+                    saveAndRender();
+                    showToast("更新しました");
+                    showPreview(currentEditIndex);
+                } else {
+                    showToast("変更はありませんでした");
+                    showPreview(currentEditIndex);
+                }
+            }
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('local_pass_data', JSON.stringify(passwords));
+            renderList();
+        }
+
+        function renderList() {
+            const listEl = document.getElementById('passwordList');
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            listEl.innerHTML = '';
+
+            const sortedData = [...passwords].sort((a, b) => a.site.localeCompare(b.site, 'ja'));
+            const filtered = sortedData.filter(p => p.site.toLowerCase().includes(query) || p.username.toLowerCase().includes(query) || (p.note && p.note.toLowerCase().includes(query)));
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<div class="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400">データがありません</div>';
+                return;
+            }
+
+            filtered.forEach((p) => {
+                const originalIndex = passwords.findIndex(original => original === p);
+                const isSelected = selectedIndex === originalIndex;
+                const isEditing = currentEditIndex === originalIndex && viewMode === 'form';
+                
+                const card = document.createElement('div');
+                card.onclick = () => showPreview(originalIndex);
+                
+                let cardClass = "p-4 rounded-xl border transition-all cursor-pointer group relative shadow-sm ";
+                if (isSelected) {
+                    cardClass += "bg-blue-600 border-blue-600 shadow-lg shadow-blue-100 scale-[1.02] z-10";
+                } else if (isEditing) {
+                    cardClass += "bg-amber-50 border-amber-300 ring-4 ring-amber-100/50";
+                } else {
+                    cardClass += "bg-white border-slate-200 hover:border-blue-300 hover:shadow-md";
+                }
+                
+                card.className = cardClass;
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="min-w-0 flex-1">
+                            <h3 class="font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-slate-800'}">${escapeHtml(p.site)}</h3>
+                            <p class="text-xs truncate ${isSelected ? 'text-blue-100' : 'text-slate-500'}">${escapeHtml(p.username)}</p>
+                        </div>
+                        <div class="flex items-center gap-3 ml-4">
+                            <div class="text-right hidden sm:block">
+                                <p class="text-[9px] font-bold uppercase tracking-wider ${isSelected ? 'text-blue-200' : 'text-slate-300'}">Last Update</p>
+                                <p class="text-[10px] ${isSelected ? 'text-white' : 'text-slate-500'}">${p.updatedAt ? p.updatedAt.split(' ')[0] : '-'}</p>
+                            </div>
+                            <div class="${isSelected ? 'text-white' : 'text-slate-300 group-hover:text-blue-500'} transition transform group-hover:translate-x-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7" /></svg>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function confirmDelete(index) {
+            openModal("データの削除", `「${passwords[index].site}」のデータを完全に削除しますか？\n履歴を含むすべてのデータが失われます。`, "削除する", () => {
+                passwords.splice(index, 1);
+                saveAndRender();
+                showForm();
+                showToast("削除しました");
+            });
+        }
+
+        function confirmEdit(index) {
+            showForm(index);
+        }
+
+        function openModal(title, message, confirmBtnText, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerText = message;
+            const btn = document.getElementById('modalConfirmBtn');
+            btn.innerText = confirmBtnText;
+            btn.onclick = () => { onConfirm(); closeModal(); };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            document.getElementById('confirmModal').classList.remove('flex');
+        }
+
+        function copyToClipboard(text, label) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast(`${label}をコピーしました`);
+        }
+
+        function generatePass() {
+            const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+            let retVal = "";
+            for (let i = 0; i < 16; ++i) {
+                retVal += charset.charAt(Math.floor(Math.random() * charset.length));
+            }
+            document.getElementById('password').value = retVal;
+            showToast("パスワードを生成しました");
+        }
+
+        function exportData() {
+            const dataStr = JSON.stringify(passwords, null, 4);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pw_manager_backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("JSONファイルを保存しました");
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        openModal("データの復元", "現在のデータを上書きしてファイルを読み込みますか？", "復元する", () => {
+                            passwords = imported;
+                            saveAndRender();
+                            showForm();
+                            showToast("データを復元しました");
+                        });
+                    }
+                } catch (err) { alert("無効なファイルです"); }
+            };
+            reader.readAsText(file);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.transform = "translateY(0)";
+            setTimeout(() => { toast.style.transform = "translateY(80px)"; }, 2500);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
